@@ -1,0 +1,143 @@
+---
+title: "DF1-Employment"
+author: "Abhay Prasanna Rao"
+date: "2023-12-02"
+output: html_document
+---
+
+```{r setup_employment, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r,message=FALSE,warning=FALSE}
+#install.packages("tidycensus")
+# Load necessary libraries
+library(tidycensus)
+library(dplyr)
+library(tidyr)
+
+#install.packages("factoextra")
+library(factoextra)
+
+#install.packages("ggplot2")
+#install.packages("usmap")
+#install.packages("maps")
+library(ggplot2)
+library(usmap)
+library(maps)
+```
+
+## Employment
+
+```{r,message=FALSE,warning=FALSE}
+#Abhay
+#Employment - K202301 for 2021
+
+# Get ACS data
+df1 <- get_acs(geography = "state", 
+               table = "K202301", 
+               year = 2021, 
+               survey = "acs1-year", 
+               cache_table = TRUE)
+
+variables_df1 <- data.frame(
+  variable = c("K202301_001", "K202301_002", "K202301_003", "K202301_004", "K202301_005", "K202301_006", "K202301_007"),
+  label = c("Total", "In labor force:", "Civilian labor force:", "Employed", 
+            "Unemployed", "In Armed Forces", 
+            "Not in labor force")
+)
+
+
+
+# Joining the data with the variable labels to get the descriptive names
+df1_labeled <- df1 %>%
+  left_join(variables_df1, by = "variable")
+
+# Reshapeing the data so that state names are rows and variable labels are columns
+df1_wide <- df1_labeled %>%
+  pivot_wider(names_from = label, values_from = estimate, id_cols = NAME)
+
+
+
+
+```
+
+```{r,message=FALSE,warning=FALSE}
+# Calculate employment rates
+df1_wide <- df1_wide %>%
+  mutate(
+    EmploymentRate = `Employed` / `Total` * 100,
+    UnemploymentRate = `Unemployed` / `Total` * 100,
+    NotInLaborForceRate = `Not in labor force` / `Total` * 100
+  )
+
+# Plotting employment rates
+library(ggplot2)
+
+ggplot(df1_wide, aes(x = reorder(NAME, -EmploymentRate), y = EmploymentRate)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(x = "State", y = "Employment Rate (%)", title = "Employment Rates by State") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+[Interpretations:]{.underline}\
+High Employment States: The states at the far left, such as Nebraska, Minnesota, and Iowa, show the highest employment rates, each appearing to exceed 60%. Low Employment States: On the right side, Puerto Rico, West Virginia, and Mississippi have the lowest employment rates depicted, with Puerto Rico showing a rate significantly lower than all states, possibly below 40%. Variability: The chart shows that there is a significant variability in employment rates across different states and territories. This could be due to a variety of factors such as economic policies, industrial diversity, population demographics, and educational attainment levels.
+
+```{r,message=FALSE}
+# Plotting labor force participation
+ggplot(df1_wide, aes(x = NAME)) +
+  geom_bar(aes(y = `Employed`, fill = "Employed"), stat = "identity") +
+  geom_bar(aes(y = `Unemployed`, fill = "Unemployed"), stat = "identity") +
+  geom_bar(aes(y = `In Armed Forces`, fill = "Armed Forces"), stat = "identity") +
+  scale_fill_manual(values = c("Employed" = "green", "Unemployed" = "red", "Armed Forces" = "blue")) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(x = "State", y = "Number of People", fill = "Category", title = "Labor Force Participation by State")
+
+```
+
+The above bar chart shows the number of people who are employed, in armed forces or unemployed for each state. We can observe that bigger cities like california, new york, texas etc have the highest number of people who are employed. We can also notice that unemployment while compared to employment is less in each city.
+
+```{r,message=FALSE}
+ggplot(df1_wide, aes(x = UnemploymentRate)) +
+  geom_histogram(binwidth = 1, fill = "tomato", color = "black") +
+  labs(x = "Unemployment Rate (%)", y = "Number of States", title = "Distribution of Unemployment Rates across States")
+
+```
+
+The above graph shows the unployment rates across different states. We can observe that most number of states have an unemployment rate between 1-4.5%
+
+```{r,message=FALSE}
+# Correlation analysis
+employment_data <- df1_wide %>%
+  select(`Employed`, `Unemployed`, `In Armed Forces`, `Not in labor force`)
+
+correlation_matrix <- cor(employment_data, use = "complete.obs")
+
+# Visualize the correlation matrix
+library(corrplot)
+corrplot(correlation_matrix, method = "circle")
+
+```
+
+```{r,message=FALSE}
+
+# Convert state names to abbreviations
+state_abbreviations <- state.abb[match(df1_wide$NAME, state.name)]
+df1_wide$state <- state_abbreviations
+
+df1_wide$EmploymentRate <- df1_wide$`Employed` / df1_wide$Total 
+
+# Plot the map with employment rate
+plot_usmap(data = df1_wide, values = "EmploymentRate", labels = TRUE) +
+  scale_fill_continuous(name = "Employment Rate (%)", label = scales::percent_format()) +
+  theme(legend.position = "right") +
+  labs(title = "Employment Rate by State in 2021")
+
+
+```
+
+------------------------------------------------------------------------
+
+The above chart shows the distribution of employment rates in the form of a map of the united states for better visualization. We can see that states like UT,NE,MN have the highest employment rates.

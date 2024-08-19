@@ -1,0 +1,366 @@
+---
+title: "Proposal Draft 1"
+authors: ["Abhay", "Srika","Neha","Esha","Niharika"]
+date: "2023-11-12"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup_1, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r, child=c('DF1-Employment.Rmd','DF2-Education.Rmd','DF3-Citizenship.Rmd','DF4-Age.Rmd','DF5-Housing.Rmd','DF6-Disabilities.Rmd')}
+```
+
+```{r}
+#census_api_key(Sys.getenv("CENSUS_API_KEY"), install = TRUE)
+```
+
+```{r}
+#install.packages("tidycensus")
+# Load necessary libraries
+library(tidycensus)
+library(dplyr)
+library(tidyr)
+
+#install.packages("factoextra")
+library(factoextra)
+
+#install.packages("ggplot2")
+#install.packages("usmap")
+#install.packages("maps")
+library(ggplot2)
+library(usmap)
+library(maps)
+
+#install.packages("plotly")
+```
+
+
+```{r}
+merged_data <- df1_wide %>%
+  left_join(df2_wide, by = "NAME") %>%
+  left_join(df3_wide, by = "NAME")%>%
+  left_join(df4_wide, by = "NAME")%>%
+  left_join(df5_wide, by = "NAME")%>%
+  left_join(df6_wide, by = "NAME")
+
+
+columns_to_drop <- c('Total.x', 'Total.y', 'Total.x.x', 'Total.y.y')
+merged_data <- merged_data[, !(names(merged_data) %in% columns_to_drop)]
+
+```
+
+## **"Socio-Economic Factors Influencing Employment in the United States: A Comprehensive State-by-State Analysis"**
+
+
+
+```{r}
+#Check for Missing Values
+# Checking the number of missing values in each column
+summarize_missing_data <- function(data) {
+  sapply(data, function(x) sum(is.na(x)))
+}
+
+missing_data_summary <- summarize_missing_data(merged_data)
+
+
+```
+
+```{r}
+# Handling missing values
+handle_missing_values <- function(data) {
+  for (col in colnames(data)) {
+    if (is.numeric(data[[col]])) {
+      data[[col]] <- ifelse(is.na(data[[col]]), median(data[[col]], na.rm = TRUE), data[[col]])
+    }
+    # Add other conditions if needed for categorical data
+  }
+  return(data)
+}
+
+merged_data <- handle_missing_values(merged_data)
+
+```
+
+```{r}
+# Function to normalize only numeric columns
+normalize_data <- function(data) {
+  for (col in colnames(data)) {
+    if (is.numeric(data[[col]])) {
+      min_val <- min(data[[col]], na.rm = TRUE)
+      max_val <- max(data[[col]], na.rm = TRUE)
+      data[[col]] <- (data[[col]] - min_val) / (max_val - min_val)
+    }
+  }
+  return(data)
+}
+
+# Apply the normalization function to the merged_data
+normalized_data <- normalize_data(merged_data)
+
+```
+
+```{r}
+# # Create a new dataset with only numeric columns
+# numeric_data <- normalized_data[sapply(normalized_data, is.numeric)]
+# 
+# # Compute the correlation matrix
+# correlation_matrix <- cor(numeric_data, use = "complete.obs")
+# 
+# # Use corrplot to visualize
+# library(corrplot)
+# corrplot(correlation_matrix, method = "circle")
+# 
+
+
+```
+
+```{r}
+# Example: Comparing Education and Employment Rates
+ggplot(normalized_data, aes(x = `Education_Bachelors_degree`, y = EmploymentRate)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+
+  labs(title = "Relation between Bachelors Degree Holders and Employment Rate", x = "Percentage of Bachelor's Degree Holders", y = "Employment Rate")
+
+  labs(title = "Relation between Bachelors Degree Holders and Employment Rate", x = "Percentage of Bachelors Degree Holders", y = "Employment Rate")
+
+
+```
+The plot suggests a positive correlation where states with a higher percentage of Bachelor's degree holders tend to have higher employment rates, although the relationship does not appear to be very strong. The spread of the data points is quite broad, especially in the middle range of the percentage of Bachelor's degree holders, which implies there are other factors at play influencing employment rates beyond just higher education attainment. The confidence interval, shown by the shaded area, is quite wide, indicating a significant variation in the employment rate at any given level of Bachelor's degree holders. This leads me to think that while education is an important factor in employment, it is certainly not the only one, and state-specific economic policies, industries, and other socioeconomic factors might also play crucial roles.
+
+
+
+```{r}
+numeric_columns <- sapply(merged_data, is.numeric)
+numeric_data <- merged_data[, numeric_columns]
+
+# Create a correlation matrix
+correlation_matrix <- cor(numeric_data)
+
+# Round the correlation matrix values
+rounded_correlation_matrix <- round(correlation_matrix, digits = 2)
+
+# Print the rounded correlation matrix
+#print(rounded_correlation_matrix)
+# Install the knitr package if not already installed
+# install.packages("knitr")
+
+# Load the knitr package
+library(knitr)
+
+# Print the rounded correlation matrix as a table
+kable(rounded_correlation_matrix)
+```
+
+The above table shows the correlation between all the variables from all the tables we took for the study. This table is particularly useful to do the first pick of which variables will be good to compare with each other. There is one thing we should be careful about when we take inferences from this table. Some variables are representing almost the samething so we should not take those variables for drawing conclusions.
+
+```{r}
+# Assuming 'correlation_matrix' is your correlation matrix
+employment_correlations <- correlation_matrix["EmploymentRate", ]
+
+# Remove the correlation of EmploymentRate with itself
+employment_correlations <- employment_correlations[employment_correlations != 1]
+
+# Convert to data frame for plotting
+correlation_df <- data.frame(
+  Variable = names(employment_correlations),
+  Correlation = employment_correlations
+)
+
+
+```
+
+```{r}
+
+# # Plotting
+# ggplot(correlation_df, aes(x = reorder(Variable, Correlation), y = Correlation)) +
+#   geom_bar(stat = "identity", fill = "steelblue") +
+#   coord_flip() +  # Flips the coordinates to make the plot horizontal
+#   labs(title = "Correlation of Various Factors with Employment Rate",
+#        x = "Variable",
+#        y = "Correlation with Employment Rate") +
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+```
+
+```{r}
+# library(dplyr)
+# library(ggplot2)
+# library(corrplot)
+# 
+# # Calculating correlations
+# corr_matrix <- cor(rounded_correlation_matrix)
+# 
+# # Plotting the heatmap
+# corrplot(corr_matrix, method = "color")
+
+```
+
+
+```{r,warning=FALSE}
+# Load the plotly and dplyr libraries
+library(plotly)
+library(dplyr)
+
+X_variable <- "Unemployed"
+Y_variables <- c("Education_Bachelors_degree", "Education_Graduate_professional degree", "Education_Below_9th grade", "Education_High_school_graduate")
+
+# Convert data from wide to long format for easier plotting
+long_data <- merged_data %>%
+  select(all_of(c(X_variable, Y_variables))) %>%
+  gather(key = "variable", value = "value", -all_of(X_variable))
+
+# Create an interactive scatter plot
+plotly_scatter <- long_data %>%
+  plot_ly(x = ~Unemployed, y = ~value, text = ~variable, mode = "markers", color = ~variable) %>%
+  add_markers(marker = list()) %>%
+  layout(title = "Interactive Scatter Plot: Un-Employed vs. Education Levels",
+         xaxis = list(title = "Un-Employed"),
+         yaxis = list(title = "Number of People"),
+         hovermode = "closest")
+
+# Show the interactive plot
+plotly_scatter
+
+```
+
+The plot shows the number of people in each education level vs the number of unemployed in that state. The one difference that we can see is in the slope of the different age groups (the different color lines).The steepest one being the people with high school level of eductaion. And the lowest being the number of people with the education below 9th grade.
+
+```{r,warning=FALSE}
+# Assuming 'merged_data' is your merged dataset with employment and housing information
+# Assuming 'ggplot2' is already loaded
+
+# Create a scatter plot
+# ggplot(merged_data, aes(x = `Owner Occupied`, y = EmploymentRate)) +
+#   geom_point() +
+#   geom_smooth(method = "lm") +
+#   labs(title = "Correlation between Owner-Occupied Housing and Employment Rate",
+#        x = "Percentage of Owner-Occupied Housing",
+#        y = "Employment Rate") +
+#   theme_minimal()
+
+```
+
+
+```{r,warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(viridis)
+
+
+X_variable <- "Unemployed"
+Y_variables <- c("Age_18_to_24", "Age_25_to_34", "Age_45_to_54", "Age_55_to_64")
+
+# Convert data from wide to long format for easier plotting
+long_data <- merged_data %>%
+  select(all_of(c(X_variable, Y_variables))) %>%
+  gather(key = "variable", value = "value", -all_of(X_variable))
+
+# Create the scatter plot
+plot <- ggplot(long_data, aes_string(x = X_variable, y = "value", color = "variable")) +
+  geom_point() +
+  scale_color_viridis_d() + # Use a colorful scale
+  theme_minimal() + # Minimalist theme
+  labs(title = "Scatter Plots of Various Age vs Un-Employed Rate",
+       x = "Number of Unemployed",
+       y = "Total popluation value") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(labels = scales::comma) +
+  theme(plot.title = element_text(hjust = 0.5), # Center the title
+        axis.text.x = element_text(angle = 45, hjust = 1)) # Slant x-axis labels
+
+plotly_plot <- ggplotly(plot)
+print(plotly_plot)
+
+```
+From the above graph we can infer that people who are between 18 years to 34 are the least unemployed amoung various states when compared to the other ages, with a few outliers. Age 55 to 64 are the most employed due to them being aged, due to retirement etc.
+
+```{r,warning=FALSE}
+
+
+plotly_scatter <- merged_data %>%
+  plot_ly(x = ~`Owner Occupied`, y = ~UnemploymentRate, text = ~NAME, mode = "markers") %>%
+  add_markers(marker = list(color = "blue", size = 10, opacity = 0.7)) %>%
+  layout(title = "Interactive Scatter Plot: Owner-Occupied Housing vs. Unemployment Rate",
+         xaxis = list(title = "Percentage of Owner-Occupied Housing"),
+         yaxis = list(title = "Unemployment Rate (%)"),
+         hovermode = "closest") %>%
+  add_annotations(text ="", x = ~`Owner Occupied`, y = ~UnemploymentRate, showarrow = FALSE)
+
+# Show the interactive plot
+plotly_scatter
+
+
+```
+
+The above plotly plot shows the percentage of owner-occupied houses vs unemployment rate for each state.Each point represents and a state and we can hover over the point to get the corresponding state name and exact value of unemployment rate and percentage of owner occupied houses. Although we cannot see any clear pattern we can see that some points corresponding to Florida Texas and California have higher percentage of owner occupied housing compared to the otehr states the other states.
+
+```{r,warning=FALSE}
+
+
+X_variable <- "Unemployed"
+Y_variables <- c("Total With Disabilities", "No Disability")
+
+# Convert data from wide to long format for easier plotting
+long_data <- merged_data %>%
+  select(all_of(c(X_variable, Y_variables))) %>%
+  gather(key = "variable", value = "value", -all_of(X_variable))
+
+# Create an interactive scatter plot
+plotly_scatter <- long_data %>%
+  plot_ly(x = ~Unemployed, y = ~value, text = ~variable, mode = "markers", color = ~variable) %>%
+  add_markers(marker = list(size = 10)) %>%
+  layout(title = "Interactive Scatter Plot: Un-Employed vs. Disability Status",
+         xaxis = list(title = "Un-Employed"),
+         yaxis = list(title = "Number of People"),
+         hovermode = "closest")
+
+# Show the interactive plot
+plotly_scatter
+```
+From the above graph we can infer that the people with disabilities and people without disabilities have equal number of oppourtunities.
+```{r,warning=FALSE}
+
+
+# Create an interactive scatter plot
+plotly_scatter <- merged_data %>%
+  plot_ly() %>%
+  add_trace(x = ~`U.S. citizen`, y = ~Unemployed, type = 'scatter', mode = 'markers', 
+            marker = list(color = 'blue', size = 10), name = 'U.S. Citizen') %>%
+  add_trace(x = ~`Not a U.S. citizen`, y = ~Unemployed, type = 'scatter', mode = 'markers', 
+            marker = list(color = 'red', size = 10), name = 'Not a U.S. Citizen') %>%
+  layout(title = 'Interactive Scatter Plot: Unemployment vs Citizenship Status',
+         xaxis = list(title = 'Citizenship Status'),
+         yaxis = list(title = 'Unemployment'),
+         hovermode = 'closest')
+
+# Show the interactive plot
+plotly_scatter
+
+```
+From the above graph, we can infer that, in each state, the number of people unemployed who are US citizen is more compared to who are not a US citizen. This could be due to a varity of reasons, few of them are:
+- Number of Non-US citizens are less compared to US citizens
+- Few companies employ people who have great GPA, academic performance, extracurrical activities and internation students who come to study in US tend to do more compared to a resident as they have more respponsibiltes on their shlolders as shown by a study conducted by Pew Research.
+This could also infers that many Non-US citizens in US, who get a job after studies or who come directly on a work visa tend to get a job and they stay stable for a period of time.
+
+
+```{r,warning=FALSE}
+# ggplot(merged_data, aes(x=DisabilityRate, y=EmploymentRate)) +
+#   geom_point() +
+#   geom_smooth(method=lm) +
+#   labs(title="Disability Rate vs. Employment Rate",
+#        x="Disability Rate",
+#        y="Employment Rate")
+
+```
+
+
+
